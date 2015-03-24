@@ -1,0 +1,12 @@
+Categories (parentID restraint)
+CatPart
+Content
+ContentBridge (with foreign key relationships mapped to new Content data)
+Part
+PartAttribute
+PartImages
+PartPackage
+PartVideo
+Price
+Testimonial
+Video
