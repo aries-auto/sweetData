@@ -191,6 +191,8 @@ var (
 	checkPart  = `select partID from Part partID = ?`
 	insertPart = `insert into Part partID, status, dateModified, dateAdded, shortDesc,oldPartNumber,priceCode,classID, featured,
 	 ACESPartTypeID, replacedBy, brandID values(?,?,?,?,?,?,?,?,?,?,?,?)`
+	checkAttribute  = `select pAttriID from PartAttribute where partID = ? and value = ? and field = ? and sort = ? `
+	insertAttribute = `insert into PartAttribute (partID, value, field, sort, canFilter) values (?,?,?,?,?)`
 )
 
 func GetParts() error {
@@ -299,7 +301,56 @@ func InsertParts(parts []Part) error {
 		if err != nil {
 			return err
 		}
+
+		for _, a := range p.Attributes {
+			attrID, err := a.Check(p)
+			if attrID > 0 {
+				continue
+			}
+			if err != nil && err != sql.ErrNoRows {
+				return err
+			}
+			err = a.Insert(p)
+			if err != nil {
+				return err
+			}
+		}
 	}
 
+	return err
+}
+
+func (a *Attribute) Check(p Part) (int, error) {
+	var id int
+	var err error
+	db, err := sql.Open("mysql", database.NewDBConnectionString())
+	if err != nil {
+		return id, err
+	}
+	defer db.Close()
+
+	stmt, err := db.Prepare(checkAttribute)
+	if err != nil {
+		return id, err
+	}
+	defer stmt.Close()
+	err = stmt.QueryRow(p.ID, a.Value, a.Key, a.Sort).Scan(&id)
+	return id, err
+}
+
+func (a *Attribute) Insert(p Part) error {
+	var err error
+	db, err := sql.Open("mysql", database.NewDBConnectionString())
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	stmt, err := db.Prepare(insertAttribute)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+	_, err = stmt.Exec(p.ID, a.Value, a.Key, a.Sort, 0)
 	return err
 }
