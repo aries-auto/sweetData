@@ -83,7 +83,7 @@ var (
 	checkVideoCdn   = `select ID from VideoCdnFiles where cdnID = ? and videoID = ?`
 	checkVideoChan  = `select ID from VideoChannels where videoID = ? and channelID = ?`
 	insertVideoCdn  = `insert into VideoCdnFiles (cdnID, videoID) values (?,?)`
-	insertVideoChan = `insert into VideoChan (videoID, channelID) values (?,?)`
+	insertVideoChan = `insert into VideoChannels (videoID, channelID) values (?,?)`
 )
 
 func (v *Video) Check() (int, error) {
@@ -101,7 +101,7 @@ func (v *Video) Check() (int, error) {
 	}
 	defer stmt.Close()
 	err = stmt.QueryRow(
-		v.VideoType,
+		v.VideoType.ID,
 		v.Title,
 		v.Description,
 		v.DateAdded,
@@ -135,7 +135,7 @@ func InsertVideos(videos []Video) error {
 			return err
 		}
 		res, err := stmt.Exec(
-			v.VideoType,
+			v.VideoType.ID,
 			v.Title,
 			v.Description,
 			v.DateAdded,

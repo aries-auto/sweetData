@@ -12,7 +12,7 @@ import (
 func main() {
 	flag.Parse()
 	//update Parts Before Categories
-	err := part.GetParts()
+	err := part.GetAndInsertParts()
 	log.Print(err)
 
 	//get cats by brand

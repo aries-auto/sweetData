@@ -35,10 +35,10 @@ type Part struct {
 	Attributes []Attribute `json:"attributes" xml:"attributes"`
 	// VehicleAttributes []string    `json:"vehicle_atttributes" xml:"vehicle_attributes"` //ignore
 	Vehicles []Vehicle `json:"vehicles,omitempty" xml:"vehicles,omitempty"`
-	// Content           []Content   `json:"content" xml:"content"` //ignore - handled in content/contentbridge
-	Pricing []Price `json:"pricing" xml:"pricing"`
-	// Reviews           []Review      `json:"reviews" xml:"reviews"` //ignore
-	Images []Image `json:"images" xml:"images"`
+	Content  []Content `json:"content" xml:"content"`
+	Pricing  []Price   `json:"pricing" xml:"pricing"`
+	Reviews  []Review  `json:"reviews" xml:"reviews"`
+	Images   []Image   `json:"images" xml:"images"`
 	// Related       []int         `json:"related" xml:"related"`       //ignore
 	// Categories    []Category    `json:"categories" xml:"categories"` //ignore - handled in categories
 	Videos   []video.Video `json:"videos" xml:"videos"`
@@ -78,21 +78,6 @@ type Price struct {
 	Enforced     bool      `json:"enforced,omitempty", xml:"enforced, omitempty"`
 	DateModified time.Time `json:"dateModified,omitempty" xml:"dateModified,omitempty"`
 }
-
-// type Review struct {
-// 	Id          int       `json:"id,omitempty" xml:"id,omitempty"`
-// 	PartID      int       `json:"partId,omitempty" xml:"partId,omitempty"`
-// 	Rating      int       `json:"rating,omitempty" xml:"rating,omitempty"`
-// 	Subject     string    `json:"subject,omitempty" xml:"subject,omitempty"`
-// 	ReviewText  string    `json:"reviewText,omitempty" xml:"reviewText,omitempty"`
-// 	Name        string    `json:"name,omitempty" xml:"name,omitempty"`
-// 	Email       string    `json:"email,omitempty" xml:"email,omitempty"`
-// 	Active      bool      `json:"active,omitempty" xml:"active,omitempty"`
-// 	Approved    bool      `json:"approved,omitempty" xml:"approved,omitempty"`
-// 	CreatedDate time.Time `json:"createdDate,omitempty" xml:"createdDate,omitempty"`
-// 	// Customer    customer.Customer `json:"customer,omitempty" xml:"customer,omitempty"`
-// }
-// type Reviews []Review
 
 type Image struct {
 	ID     int      `json:"id,omitempty" xml:"id,omitempty"`
@@ -185,40 +170,75 @@ type Config struct {
 	Value string `json:"value,omitempty" xml:"value,omitempty"`
 }
 
+type Review struct {
+	Id          int       `json:"id,omitempty" xml:"id,omitempty"`
+	PartID      int       `json:"partId,omitempty" xml:"partId,omitempty"`
+	Rating      int       `json:"rating,omitempty" xml:"rating,omitempty"`
+	Subject     string    `json:"subject,omitempty" xml:"subject,omitempty"`
+	ReviewText  string    `json:"reviewText,omitempty" xml:"reviewText,omitempty"`
+	Name        string    `json:"name,omitempty" xml:"name,omitempty"`
+	Email       string    `json:"email,omitempty" xml:"email,omitempty"`
+	Active      bool      `json:"active,omitempty" xml:"active,omitempty"`
+	Approved    bool      `json:"approved,omitempty" xml:"approved,omitempty"`
+	CreatedDate time.Time `json:"createdDate,omitempty" xml:"createdDate,omitempty"`
+	CustomerID  int       `json:"customerId,omitempty" xml:"customerId,omitempty"`
+}
+
 var pageCounter = 1
 
 var (
-	checkPart  = `select partID from Part partID = ?`
-	insertPart = `insert into Part partID, status, dateModified, dateAdded, shortDesc,oldPartNumber,priceCode,classID, featured,
-	 ACESPartTypeID, replacedBy, brandID values(?,?,?,?,?,?,?,?,?,?,?,?)`
-	checkAttribute  = `select pAttriID from PartAttribute where partID = ? and value = ? and field = ? and sort = ? `
+	checkPart  = `select partID from Part where partID = ?`
+	insertPart = `insert into Part (partID, status, dateModified, dateAdded, shortDesc,oldPartNumber,priceCode,classID, featured,
+		ACESPartTypeID, replacedBy, brandID) values(?,?,?,?,?,?,?,?,?,?,?,?)`
+	checkAttribute  = `select pAttrID from PartAttribute where partID = ? and value = ? and field = ? and sort = ? `
 	insertAttribute = `insert into PartAttribute (partID, value, field, sort, canFilter) values (?,?,?,?,?)`
+	checkPrice      = `select priceID from Price where partID = ? and priceType = ? and price = ? and enforced = ? `
+	insertPrice     = `insert into Price (partID, priceType, price, enforced) values (?,?,?,?)`
+	checkReview     = `select reviewID from Review where partID = ? and rating = ? and subject = ? and review _text = ? and 
+		name = ? and email = ? and active = ? and approved = ? and createdDate = ? and cust_id = ? `
+	insertReview = `insert into Review (partID,rating, subject, review _text,
+		name, email, active, approved, createdDate, cust_id) values (?,?,?,?,?,?,?,?,?,?,?)`
+	checkImage      = `select imageID from PartImages where sizeID = ? and sort = ? and path = ? and height = ? and width = ? and partID = ?`
+	insertImage     = `insert into PartImages (sizeID, sort, path, height, width, partID) values (?,?,?,?,?,?)`
+	getImageSizeIds = `select size, sizeID from PartImageSizes`
+	checkPackage    = `select ID from PartPackage where partID = ? and height = ? and width = ? and length = ? and weight = ? and dimensionUOM = ? 
+		and weightUOM = ? and packageUOM = ? and quantity = ? and typeID = ?`
+	insertPackage = ` insert into PartPackage (partID, height, width, length, weight, dimensionUOM, weightUOM, packageUOM, quantity, typeID)
+		values (?,?,?,?,?,?,?,?,?,?)`
+	getUOMs           = `select code, ID from UnitOfMeasure`
+	checkContent      = `select contentID from Content where text = ? and cTypeID = ? and userID = ? and deleted = ?`
+	insertContent     = `insert into Content (text, cTypeID, userID, deleted) values (?,?,?,?)`
+	checkPartContent  = `select cBridgeID from ContentBridge where partID = ? and contentID = ?`
+	insertPartContent = `insert into ContentBridge (partID, contentID) values (?,?)`
+	checkContentType  = `select cTypeID from ContentType where type = ? and allowHTML = ?`
+	insertContentType = `insert into ContentType (type, allowHTML, isPrivate) values (?,?,0)`
 )
 
-func GetParts() error {
+func GetAndInsertParts() error {
 	var parts []Part
-	ps, err := getPartsByPage(pageCounter)
+	var err error
+	parts, err = getPartsByPage(pageCounter)
 	if err != nil {
 		return err
 	}
-	parts = append(parts, ps...)
-	if len(ps) > 0 {
-		pageCounter++
-		err = GetParts()
+	pageCounter++
+	err = InsertParts(parts)
+	if err != nil {
+		return err
+	}
+	if len(parts) > 0 {
+		//recursion
+		err = GetAndInsertParts()
 		if err != nil {
 			return err
 		}
-	} else {
-		pageCounter = 1
 	}
-
-	err = InsertParts(parts)
 	return err
 }
 
 func getPartsByPage(page int) ([]Part, error) {
 	var ps []Part
-	res, err := http.Get(database.Api + "&count=50&page=" + strconv.Itoa(page))
+	res, err := http.Get(database.Api + "&count=5&page=" + strconv.Itoa(page))
 	if err != nil {
 		return ps, err
 	}
@@ -229,7 +249,6 @@ func getPartsByPage(page int) ([]Part, error) {
 	}
 
 	err = json.Unmarshal(body, &ps)
-	log.Print(len(ps))
 	return ps, err
 }
 
@@ -258,6 +277,17 @@ func (p *Part) Check() (int, error) {
 //Insert Part into New DB
 func InsertParts(parts []Part) error {
 	var err error
+
+	//you'll want these maps, friend
+	imageSizeMap, err := getImageSizeMap()
+	if err != nil {
+		return err
+	}
+	uomMap, err := getUOMmap()
+	if err != nil {
+		return err
+	}
+
 	db, err := sql.Open("mysql", database.NewDBConnectionString())
 	if err != nil {
 		return err
@@ -271,30 +301,37 @@ func InsertParts(parts []Part) error {
 	defer stmt.Close()
 	for _, p := range parts {
 		id, err := p.Check()
-		if id > 0 {
-			continue
-		}
 		if err != nil && err != sql.ErrNoRows {
 			return err
 		}
-		_, err = stmt.Exec(
-			p.ID,
-			p.Status,
-			p.DateModified,
-			p.DateAdded,
-			p.ShortDesc,
-			p.OldPartNumber,
-			p.PriceCode,
-			p.ClassID,
-			p.Featured,
-			p.AcesPartTypeID,
-			p.ReplacedBy,
-			p.BrandID,
-		)
+		//insert part
+		if id < 1 || err == sql.ErrNoRows {
+			_, err = stmt.Exec(
+				p.ID,
+				p.Status,
+				p.DateModified,
+				p.DateAdded,
+				p.ShortDesc,
+				p.OldPartNumber,
+				p.PriceCode,
+				p.ClassID,
+				p.Featured,
+				p.AcesPartTypeID,
+				p.ReplacedBy,
+				p.BrandID,
+			)
+			if err != nil {
+				return err
+			}
+		}
+
+		//vehicles
+		err = vehicle.InsertVehicles(p.Vehicles)
 		if err != nil {
 			return err
 		}
-		//TODO insert attributes, content, pricing, reviews, images, videos, packages, vehicleJoin/installations,
+
+		//TODO -insert VEHICLE PART !!!!
 
 		//videos
 		err = video.InsertVideos(p.Videos)
@@ -302,6 +339,7 @@ func InsertParts(parts []Part) error {
 			return err
 		}
 
+		//attributes
 		for _, a := range p.Attributes {
 			attrID, err := a.Check(p)
 			if attrID > 0 {
@@ -315,6 +353,111 @@ func InsertParts(parts []Part) error {
 				return err
 			}
 		}
+
+		//prices
+		for _, price := range p.Pricing {
+			priceID, err := price.Check(p)
+			if priceID > 0 {
+				continue
+			}
+			if err != nil && err != sql.ErrNoRows {
+				return err
+			}
+			err = price.Insert(p)
+			if err != nil {
+				return err
+			}
+		}
+
+		//reviews
+		for _, r := range p.Reviews {
+			reviewID, err := r.Check(p)
+			if reviewID > 0 {
+				continue
+			}
+			if err != nil && err != sql.ErrNoRows {
+				return err
+			}
+			err = r.Insert(p)
+			if err != nil {
+				return err
+			}
+		}
+
+		//images
+		for _, image := range p.Images {
+			imageSizeID := imageSizeMap[image.Size] //need sizeIDs from map
+			imageID, err := image.Check(p, imageSizeID)
+			if imageID > 0 {
+				continue
+			}
+			if err != nil && err != sql.ErrNoRows {
+				return err
+			}
+			err = image.Insert(p, imageSizeID)
+			if err != nil {
+				return err
+			}
+		}
+
+		//packages
+		for _, pack := range p.Packages {
+
+			dimUOMID := uomMap[pack.DimensionUnit]
+			weiUOMID := uomMap[pack.WeightUnit]
+			packUOMID := uomMap[pack.PackageUnit]
+
+			packID, err := pack.Check(p, dimUOMID, weiUOMID, packUOMID)
+			if packID > 0 {
+				continue
+			}
+			if err != nil && err != sql.ErrNoRows {
+				return err
+			}
+			err = pack.Insert(p, dimUOMID, weiUOMID, packUOMID)
+			if err != nil {
+				return err
+			}
+		}
+
+		//content
+		for _, c := range p.Content {
+			//check contentType
+			c.ContentType.Id, err = c.ContentType.Check()
+			if err != nil && err != sql.ErrNoRows {
+				return err
+			}
+			if err == sql.ErrNoRows || c.ContentType.Id == 0 {
+				err = c.ContentType.Insert()
+				if err != nil {
+					return err
+				}
+			}
+
+			//then, actual content
+			c.ID, err = c.Check(p)
+			if err != nil && err != sql.ErrNoRows {
+				return err
+			}
+			if err == sql.ErrNoRows || c.ID == 0 {
+				err = c.Insert(p)
+				if err != nil {
+					return err
+				}
+			}
+			partContentID, err := c.CheckPartContent(p)
+			if partContentID > 0 {
+				continue
+			}
+			if err != nil && err != sql.ErrNoRows {
+				return err
+			}
+			err = c.InsertPartContent(p)
+			if err != nil {
+				return err
+			}
+		}
+
 	}
 
 	return err
@@ -353,4 +496,405 @@ func (a *Attribute) Insert(p Part) error {
 	defer stmt.Close()
 	_, err = stmt.Exec(p.ID, a.Value, a.Key, a.Sort, 0)
 	return err
+}
+
+func (price *Price) Check(p Part) (int, error) {
+	var id int
+	var err error
+	db, err := sql.Open("mysql", database.NewDBConnectionString())
+	if err != nil {
+		return id, err
+	}
+	defer db.Close()
+
+	stmt, err := db.Prepare(checkPrice)
+	if err != nil {
+		return id, err
+	}
+	defer stmt.Close()
+	err = stmt.QueryRow(p.ID, price.Type, price.Price, price.Enforced).Scan(&id)
+	return id, err
+}
+
+func (price *Price) Insert(p Part) error {
+	var err error
+	db, err := sql.Open("mysql", database.NewDBConnectionString())
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	stmt, err := db.Prepare(insertPrice)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+	_, err = stmt.Exec(p.ID, price.Type, price.Price, price.Enforced)
+	return err
+}
+
+func (r *Review) Check(p Part) (int, error) {
+	var id int
+	var err error
+	db, err := sql.Open("mysql", database.NewDBConnectionString())
+	if err != nil {
+		return id, err
+	}
+	defer db.Close()
+
+	stmt, err := db.Prepare(checkReview)
+	if err != nil {
+		return id, err
+	}
+	defer stmt.Close()
+	err = stmt.QueryRow(
+		p.ID,
+		r.Rating,
+		r.Subject,
+		r.ReviewText,
+		r.Name,
+		r.Name,
+		r.Email,
+		r.Active,
+		r.Approved,
+		r.CreatedDate,
+		r.CustomerID,
+	).Scan(&id)
+	return id, err
+}
+
+func (r *Review) Insert(p Part) error {
+	var err error
+	db, err := sql.Open("mysql", database.NewDBConnectionString())
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	stmt, err := db.Prepare(insertReview)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+	_, err = stmt.Exec(
+		p.ID,
+		r.Rating,
+		r.Subject,
+		r.ReviewText,
+		r.Name,
+		r.Name,
+		r.Email,
+		r.Active,
+		r.Approved,
+		r.CreatedDate,
+		r.CustomerID,
+	)
+	return err
+}
+
+func (i *Image) Check(p Part, imageSizeID int) (int, error) {
+	var id int
+	var err error
+	db, err := sql.Open("mysql", database.NewDBConnectionString())
+	if err != nil {
+		return id, err
+	}
+	defer db.Close()
+
+	stmt, err := db.Prepare(checkImage)
+	if err != nil {
+		return id, err
+	}
+	defer stmt.Close()
+	path := i.Path.Path
+	err = stmt.QueryRow(
+		imageSizeID,
+		i.Sort,
+		path,
+		i.Height,
+		i.Width,
+		p.ID,
+	).Scan(&id)
+	return id, err
+}
+
+func (i *Image) Insert(p Part, imageSizeID int) error {
+	var err error
+	db, err := sql.Open("mysql", database.NewDBConnectionString())
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	stmt, err := db.Prepare(insertImage)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+	path := i.Path.Path
+	_, err = stmt.Exec(
+		imageSizeID,
+		i.Sort,
+		path,
+		i.Height,
+		i.Width,
+		p.ID,
+	)
+	return err
+}
+
+func (pack *Package) Check(p Part, dimUOMID, weiUOMID, packUOMID int) (int, error) {
+	var id int
+	var err error
+	db, err := sql.Open("mysql", database.NewDBConnectionString())
+	if err != nil {
+		return id, err
+	}
+	defer db.Close()
+
+	stmt, err := db.Prepare(checkPackage)
+	if err != nil {
+		return id, err
+	}
+	defer stmt.Close()
+	err = stmt.QueryRow(
+		p.ID,
+		pack.Height,
+		pack.Width,
+		pack.Length,
+		pack.Weight,
+		dimUOMID,
+		weiUOMID,
+		packUOMID,
+		pack.Quantity,
+		pack.PackageType.ID,
+	).Scan(&id)
+	return id, err
+}
+
+func (pack *Package) Insert(p Part, dimUOMID, weiUOMID, packUOMID int) error {
+	var err error
+	db, err := sql.Open("mysql", database.NewDBConnectionString())
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	stmt, err := db.Prepare(insertPackage)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+	_, err = stmt.Exec(
+		p.ID,
+		pack.Height,
+		pack.Width,
+		pack.Length,
+		pack.Weight,
+		dimUOMID,
+		weiUOMID,
+		packUOMID,
+		pack.Quantity,
+		pack.PackageType.ID,
+	)
+	return err
+}
+
+func (c *Content) Check(p Part) (int, error) {
+	var id int
+	var err error
+	db, err := sql.Open("mysql", database.NewDBConnectionString())
+	if err != nil {
+		return id, err
+	}
+	defer db.Close()
+
+	stmt, err := db.Prepare(checkContent)
+	if err != nil {
+		return id, err
+	}
+	defer stmt.Close()
+	err = stmt.QueryRow(
+		c.Text,
+		c.ContentType.Id,
+		c.UserID,
+		c.Deleted,
+	).Scan(&id)
+	return id, err
+}
+
+func (c *Content) Insert(p Part) error {
+	var err error
+	db, err := sql.Open("mysql", database.NewDBConnectionString())
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	stmt, err := db.Prepare(insertContent)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+	res, err := stmt.Exec(
+		c.Text,
+		c.ContentType.Id,
+		c.UserID,
+		c.Deleted,
+	)
+	if err != nil {
+		return err
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return err
+	}
+	c.ID = int(id)
+	return err
+}
+
+func (c *Content) CheckPartContent(p Part) (int, error) {
+	var id int
+	var err error
+	db, err := sql.Open("mysql", database.NewDBConnectionString())
+	if err != nil {
+		return id, err
+	}
+	defer db.Close()
+
+	stmt, err := db.Prepare(checkPartContent)
+	if err != nil {
+		return id, err
+	}
+	defer stmt.Close()
+	err = stmt.QueryRow(
+		p.ID,
+		c.ID,
+	).Scan(&id)
+	return id, err
+}
+
+func (c *Content) InsertPartContent(p Part) error {
+	var err error
+	db, err := sql.Open("mysql", database.NewDBConnectionString())
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	stmt, err := db.Prepare(insertPartContent)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+	_, err = stmt.Exec(
+		p.ID,
+		c.ID,
+	)
+	return err
+}
+
+func (ct *ContentType) Check() (int, error) {
+	var id int
+	var err error
+	db, err := sql.Open("mysql", database.NewDBConnectionString())
+	if err != nil {
+		return id, err
+	}
+	defer db.Close()
+
+	stmt, err := db.Prepare(checkContentType)
+	if err != nil {
+		return id, err
+	}
+	defer stmt.Close()
+	err = stmt.QueryRow(ct.Type, ct.AllowHtml).Scan(&id)
+	return id, err
+}
+
+func (ct *ContentType) Insert() error {
+	var err error
+	db, err := sql.Open("mysql", database.NewDBConnectionString())
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	stmt, err := db.Prepare(insertContentType)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+	res, err := stmt.Exec(ct.Type, ct.AllowHtml)
+	if err != nil {
+		return err
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return err
+	}
+	ct.Id = int(id)
+	return err
+}
+
+//get image sizes
+func getImageSizeMap() (map[string]int, error) {
+	var err error
+	imageSizeMap := make(map[string]int)
+	db, err := sql.Open("mysql", database.NewDBConnectionString())
+	if err != nil {
+		return imageSizeMap, err
+	}
+	defer db.Close()
+
+	stmt, err := db.Prepare(getImageSizeIds)
+	if err != nil {
+		return imageSizeMap, err
+	}
+	defer stmt.Close()
+	res, err := stmt.Query()
+	if err != nil {
+		return imageSizeMap, err
+	}
+	var i int
+	var s string
+	for res.Next() {
+		err = res.Scan(&s, &i)
+		if err != nil {
+			return imageSizeMap, err
+		}
+		imageSizeMap[s] = i
+	}
+	return imageSizeMap, err
+}
+
+//get maps of UOM [code]id
+func getUOMmap() (map[string]int, error) {
+	var err error
+	uomMap := make(map[string]int)
+	db, err := sql.Open("mysql", database.NewDBConnectionString())
+	if err != nil {
+		return uomMap, err
+	}
+	defer db.Close()
+
+	stmt, err := db.Prepare(getUOMs)
+	if err != nil {
+		return uomMap, err
+	}
+	defer stmt.Close()
+	res, err := stmt.Query()
+	if err != nil {
+		return uomMap, err
+	}
+	var i int
+	var s string
+	for res.Next() {
+		err = res.Scan(&s, &i)
+		if err != nil {
+			return uomMap, err
+		}
+		uomMap[s] = i
+	}
+	return uomMap, err
 }

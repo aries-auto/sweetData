@@ -3,35 +3,37 @@ package database
 import (
 	"fmt"
 	"os"
-	"strings"
-	"time"
+	// "strings"
+	// "time"
 
-	"gopkg.in/mgo.v2"
+	// "gopkg.in/mgo.v2"
 )
 
 var apiKey = os.Getenv("API_KEY")
-var Api = "http://ariesautoapi.curtmfg.com/part?key=" + apiKey
 
-func MongoConnectionString() *mgo.DialInfo {
-	var info mgo.DialInfo
+// var Api = "http://ariesautoapi.curtmfg.com/part?key=" + apiKey
+var Api = "http://localhost:8080/part?key=" + apiKey
 
-	addresses := []string{"127.0.0.1"}
-	if hostString := os.Getenv("MONGO_URL"); hostString != "" {
-		addresses = strings.Split(hostString, ",")
-	}
-	info.Addrs = addresses
+// func MongoConnectionString() *mgo.DialInfo {
+// 	var info mgo.DialInfo
 
-	info.Username = os.Getenv("MONGO_USERNAME")
-	info.Password = os.Getenv("MONGO_PASSWORD")
-	info.Database = os.Getenv("MONGO_DATABASE")
-	info.Timeout = time.Second * 2
-	if info.Database == "" {
-		info.Database = "TrucksPlus"
-	}
-	info.Source = "admin"
+// 	addresses := []string{"127.0.0.1"}
+// 	if hostString := os.Getenv("MONGO_URL"); hostString != "" {
+// 		addresses = strings.Split(hostString, ",")
+// 	}
+// 	info.Addrs = addresses
 
-	return &info
-}
+// 	info.Username = os.Getenv("MONGO_USERNAME")
+// 	info.Password = os.Getenv("MONGO_PASSWORD")
+// 	info.Database = os.Getenv("MONGO_DATABASE")
+// 	info.Timeout = time.Second * 2
+// 	if info.Database == "" {
+// 		info.Database = "TrucksPlus"
+// 	}
+// 	info.Source = "admin"
+
+// 	return &info
+// }
 
 func NewDBConnectionString() string {
 	if addr := os.Getenv("DATABASE_HOST"); addr != "" {
@@ -42,7 +44,7 @@ func NewDBConnectionString() string {
 		return fmt.Sprintf("%s:%s@%s(%s)/%s?parseTime=true&loc=%s", user, pass, proto, addr, db, "America%2FChicago")
 	}
 
-	return "root:@tcp(127.0.0.1:3306)/CurtDev_Empty?parseTime=true&loc=America%2FChicago"
+	return "root:@tcp(127.0.0.1:3306)/CurtDev2?parseTime=true&loc=America%2FChicago"
 }
 
 func OldDBConnectionString() string {
