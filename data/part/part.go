@@ -32,8 +32,8 @@ type Part struct {
 	ReplacedBy     int       `json:"replacedBy,omitempty" xml:"replacedBy,omitempty"`
 	BrandID        int       `json:"brandId" xml:"brandId,attr"`
 
-	// InstallSheet      *url.URL    `json:"install_sheet" xml:"install_sheet"` //ignore - handled in content/contentBridge
-	Attributes []Attribute `json:"attributes" xml:"attributes"`
+	InstallSheet *url.URL    `json:"install_sheet" xml:"install_sheet"` //ignore - handled in content/contentBridge
+	Attributes   []Attribute `json:"attributes" xml:"attributes"`
 	// VehicleAttributes []string    `json:"vehicle_atttributes" xml:"vehicle_attributes"` //ignore
 	Vehicles []Vehicle `json:"vehicles,omitempty" xml:"vehicles,omitempty"`
 	Content  []Content `json:"content" xml:"content"`
@@ -300,30 +300,30 @@ func InsertParts(parts []Part) error {
 	}
 	defer stmt.Close()
 	for _, p := range parts {
-		// id, err := p.Check()
-		// if err != nil && err != sql.ErrNoRows {
-		// 	return err
-		// }
-		// //insert part
-		// if id < 1 || err == sql.ErrNoRows {
-		// 	_, err = stmt.Exec(
-		// 		p.ID,
-		// 		p.Status,
-		// 		p.DateModified,
-		// 		p.DateAdded,
-		// 		p.ShortDesc,
-		// 		p.OldPartNumber,
-		// 		p.PriceCode,
-		// 		p.ClassID,
-		// 		p.Featured,
-		// 		p.AcesPartTypeID,
-		// 		p.ReplacedBy,
-		// 		p.BrandID,
-		// 	)
-		// 	if err != nil {
-		// 		return err
-		// 	}
-		// }
+		id, err := p.Check()
+		if err != nil && err != sql.ErrNoRows {
+			return err
+		}
+		//insert part
+		if id < 1 || err == sql.ErrNoRows {
+			_, err = stmt.Exec(
+				p.ID,
+				p.Status,
+				p.DateModified,
+				p.DateAdded,
+				p.ShortDesc,
+				p.OldPartNumber,
+				p.PriceCode,
+				p.ClassID,
+				p.Featured,
+				p.AcesPartTypeID,
+				p.ReplacedBy,
+				p.BrandID,
+			)
+			if err != nil {
+				return err
+			}
+		}
 
 		//vehicles
 		err = vehicle.InsertPartVehicles(p.ID)
@@ -331,7 +331,7 @@ func InsertParts(parts []Part) error {
 			return err
 		}
 
-		break //TOOD
+		// break //TOOD
 		//TODO -insert VEHICLE PART !!!!
 
 		//videos
@@ -436,6 +436,34 @@ func InsertParts(parts []Part) error {
 			}
 
 			//then, actual content
+			c.ID, err = c.Check(p)
+			if err != nil && err != sql.ErrNoRows {
+				return err
+			}
+			if err == sql.ErrNoRows || c.ID == 0 {
+				err = c.Insert(p)
+				if err != nil {
+					return err
+				}
+			}
+			partContentID, err := c.CheckPartContent(p)
+			if partContentID > 0 {
+				continue
+			}
+			if err != nil && err != sql.ErrNoRows {
+				return err
+			}
+			err = c.InsertPartContent(p)
+			if err != nil {
+				return err
+			}
+		}
+
+		//install sheet
+		if p.InstallSheet.Path != "" {
+			var c Content
+			c.ContentType.Id = 43
+			c.Text = p.InstallSheet.Path
 			c.ID, err = c.Check(p)
 			if err != nil && err != sql.ErrNoRows {
 				return err

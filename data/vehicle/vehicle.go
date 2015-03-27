@@ -86,36 +86,16 @@ type Config struct {
 }
 
 var (
-	getVehicleFromOldDB = `
-		select b.AAIABaseVehicleID, b.YearID, ma.AAIAMakeID, ma.MakeName, mo.AAIAModelID, mo.ModelName, 
-		s.AAIASubmodelID, s.SubmodelName, ca.vcdbID, ca.value, cat.AcesTypeID, cat.Name
-		from vcdb_Vehicle as v 
-		join BaseVehicle as b on b.ID = v.BaseVehicleID
-		join vcdb_Make as ma on ma.ID = b.MakeID
-		join vcdb_Model as mo on mo.ID = b.ModelID
-		left join Submodel as s on s.ID = v.SubmodelID
-		left join VehicleConfigAttribute as vca on vca.VehicleConfigID = v.ConfigID
-		left join ConfigAttribute as ca on ca.ID = vca.AttributeID
-		left join ConfigAttributeType as cat on cat.ID = ca.ConfigAttributeTypeID
-		where v.ID = ?`
-	checkVehicle  = `select ID from vcdb_Vehicle where BaseVehicleID = ? and SubModelID = ? and ConfigID = ? and AppID = ? and RegionID = ?`
-	getVehicle    = `select ID, BaseVehicleID, SubModelID, ConfigID, AppID, RegionID from vcdb_Vehicle where ID = ?`
 	insertVehicle = `insert into vcdb_Vehicle (BaseVehicleID, SubModelID, ConfigID, AppID, RegionID) values (?,?,?,?,?)`
+	getMakeByName = `select ID from vcdb_Make where AAIAMakeID = ? and MakeName = ?`
+	insertMake    = `insert into vcdb_Make (AAIAMakeID, MakeName) values (?,?)`
+	allMakes      = `select AAIAMakeID, MakeName from vcdb_Make `
+	makeIDs       = `select ID, AAIAMakeID from vcdb_Make`
 
-	getYear    = `select YearID from vcdb_Year where YearID = ?`
-	insertYear = `insert into vcdb_Year (YearID) values (?)`
-
-	getMakeByName   = `select ID from vcdb_Make where AAIAMakeID = ? and MakeName = ?`
-	getMakeFromVcdb = `select MakeID from Model where MakeName = ?`
-	insertMake      = `insert into vcdb_Make (AAIAMakeID, MakeName) values (?,?)`
-	allMakes        = `select AAIAMakeID, MakeName from vcdb_Make `
-	makeIDs         = `select ID, AAIAMakeID from vcdb_Make`
-
-	getModelByName   = `select ID from vcdb_Model where AAIAModelID = ? and ModelName = ?`
-	getModelFromVcdb = `select ModelID, VehicleTypeID from Model where ModelName = ?`
-	insertModel      = `insert into vcdb_Model (AAIAModelID, ModelName, VehicleTypeID) values (?,?,?)`
-	allModels        = `select AAIAModelID, ModelName, VehicleTypeID from vcdb_Model`
-	modelIDs         = `select ID, AAIAModelID from vcdb_Model`
+	getModelByName = `select ID from vcdb_Model where AAIAModelID = ? and ModelName = ?`
+	insertModel    = `insert into vcdb_Model (AAIAModelID, ModelName, VehicleTypeID) values (?,?,?)`
+	allModels      = `select AAIAModelID, ModelName, VehicleTypeID from vcdb_Model`
+	modelIDs       = `select ID, AAIAModelID from vcdb_Model`
 
 	allBaseVehicles = `select b.AAIABaseVehicleID, b.YearID, ma.AAIAMakeID, mo.AAIAModelID
 		from BaseVehicle as b
@@ -128,15 +108,14 @@ var (
 		join vcdb_Model as mo on mo.ID = b.ModelID
 		where b.YearID = ?
 		and ma.MakeName = ?
-		ane mo.ModelName = ?`
+		and mo.ModelName = ?`
 	checkBaseVehicles = `select ID from BaseVehicle where AAIABaseVehicleID = ?`
 	insertBaseVehicle = `insert into BaseVehicle (AAIABaseVehicleID, YearID, MakeID, ModelID) values (?,?,?,?)`
 
-	getSubmodelByName   = `select ID from Submodel where SubmodelName = ? and AAIASubmodelID = ?`
-	getSubmodel         = `select ID from Submodel where SubmodelName = ?`
-	getSubmodelFromVcdb = `select SubmodelID from Submodel where SubmodelName = ?`
-	insertSubmodel      = `insert into Submodel (AAIASubmodelID, SubmodelName) values (?,?)`
-	allSubmodels        = `select AAIASubmodelID, SubmodelName from Submodel`
+	getSubmodelByName = `select ID from Submodel where SubmodelName = ? and AAIASubmodelID = ?`
+	getSubmodel       = `select ID from Submodel where SubmodelName = ?`
+	insertSubmodel    = `insert into Submodel (AAIASubmodelID, SubmodelName) values (?,?)`
+	allSubmodels      = `select AAIASubmodelID, SubmodelName from Submodel`
 
 	checkAttributeType = `select ID from ConfigAttributeType where name = ? and AcesTypeID = ? and sort = ?`
 	checkAttribute     = `select ca.ID from ConfigAttribute as ca join ConfigAttributeType as cat on 
@@ -152,12 +131,10 @@ var (
 		join ConfigAttributeType as cat on cat.ID = ca.ConfigAttributeTypeID
 		where cat.name = ?
 		and ca.value = ?`
-
 	insertVehicleConfig          = `insert into VehicleConfig (AAIAVehicleConfigID) values (0)`
 	insertVehicleConfigAttribute = `insert into VehicleConfigAttribute (AttributeID, VehicleConfigID) values (?,?)`
 	insertVehiclePartJoin        = `insert info vcdb_VehiclePart (VehicleID, PartNumber) values (?,?)`
-
-	findVehicle = `select v.ID, b.AAIABaseVehicleID, b.YearID, ma.AAIAMakeID, ma.MakeName, mo.AAIAModelID, mo.ModelName, 
+	findVehicle                  = `select v.ID, b.AAIABaseVehicleID, b.YearID, ma.AAIAMakeID, ma.MakeName, mo.AAIAModelID, mo.ModelName, 
 		s.AAIASubmodelID, s.SubmodelName, ca.ID, ca.vcdbID, ca.value, cat.AcesTypeID, cat.Name
 		from vcdb_Vehicle as v 
 		join BaseVehicle as b on b.ID = v.BaseVehicleID
@@ -215,6 +192,7 @@ func InsertPartVehicles(partID int) error {
 	return err
 }
 
+//api call to get PartVehicle
 func getPartVehicles(partID int) ([]PartVehicle, error) {
 	var vs []PartVehicle
 	res, err := http.Get(database.Api + "part/" + strconv.Itoa(partID) + "/vehicles?key=" + database.ApiKey)
@@ -243,6 +221,7 @@ func InsertPartVehicle(ve PartVehicle, partID int) error {
 
 	var res *sql.Rows
 
+	//Get V.ID, based on whether there is submodel/configs or not
 	if ve.Submodel == "" {
 		stmt, err := db.Prepare(findVehicle + submodelNullAddon)
 		if err != nil {
@@ -250,7 +229,7 @@ func InsertPartVehicle(ve PartVehicle, partID int) error {
 		}
 		defer stmt.Close()
 		res, err = stmt.Query(ve.Year, ve.Make, ve.Model)
-		if err != nil {
+		if err != nil && err != sql.ErrNoRows {
 			return err
 		}
 	} else if len(ve.Config) < 1 {
@@ -260,7 +239,7 @@ func InsertPartVehicle(ve PartVehicle, partID int) error {
 		}
 		defer stmt.Close()
 		res, err = stmt.Query(ve.Year, ve.Make, ve.Model, ve.Submodel)
-		if err != nil {
+		if err != nil && err != sql.ErrNoRows {
 			return err
 		}
 	} else {
@@ -270,7 +249,7 @@ func InsertPartVehicle(ve PartVehicle, partID int) error {
 		}
 		defer stmt.Close()
 		res, err = stmt.Query(ve.Year, ve.Make, ve.Model, ve.Submodel)
-		if err != nil {
+		if err != nil && err != sql.ErrNoRows {
 			return err
 		}
 	}
@@ -324,9 +303,8 @@ func InsertPartVehicle(ve PartVehicle, partID int) error {
 		cs = append(cs, c)
 	}
 	v.Configuration.Configs = cs
-	log.Print("Single match -------------------------------------", partID)
-	log.Print(v)
 
+	//there is a vehicle, check for matching configs
 	if v.ID > 0 {
 		//check a match of config arrays
 		veConfigMap := make(map[string]string)
@@ -353,8 +331,8 @@ func InsertPartVehicle(ve PartVehicle, partID int) error {
 
 	}
 
+	//Vehicle doesn't exist (id == 0), create
 	if v.ID == 0 {
-		//if it doesn't exist (id == 0), create
 		v.ID, err = ve.Insert()
 		if err != nil {
 			return err
@@ -371,6 +349,7 @@ func InsertPartVehicle(ve PartVehicle, partID int) error {
 	return err
 }
 
+//From a partVehicle, insert a REAL vehicle
 func (ve *PartVehicle) Insert() (int, error) {
 	var err error
 	var vid int
@@ -390,6 +369,7 @@ func (ve *PartVehicle) Insert() (int, error) {
 	defer stmt.Close()
 	err = stmt.QueryRow(ve.Year, ve.Make, ve.Model).Scan(&BaseVehicleID)
 	if err != nil {
+		log.Panic("You missed importing a base vehicle")
 		return 0, err
 	}
 
@@ -400,6 +380,7 @@ func (ve *PartVehicle) Insert() (int, error) {
 	defer stmt.Close()
 	err = stmt.QueryRow(ve.Submodel).Scan(&SubModelID)
 	if err != nil {
+		log.Panic("You missed importing a submodel")
 		return 0, err
 	}
 
@@ -414,6 +395,7 @@ func (ve *PartVehicle) Insert() (int, error) {
 		var attID int
 		err = stmt.QueryRow(partVehicleConfig.Type, partVehicleConfig.Value).Scan(&attID)
 		if err != nil {
+			log.Panic("You missed importing a config")
 			return 0, err
 		}
 		attIDs = append(attIDs, attID)
@@ -461,376 +443,7 @@ func (ve *PartVehicle) Insert() (int, error) {
 	return vid, err
 }
 
-// func Check(vehicle PartVehicle) error {
-// 	var v Vehicle
-// 	var con ConfigAttribute
-
-// 	var err error
-
-// 	db, err := sql.Open("mysql", database.OldDBConnectionString())
-// 	if err != nil {
-// 		return err
-// 	}
-// 	defer db.Close()
-
-// 	stmt, err := db.Prepare(getVehicleFromOldDB)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	defer stmt.Close()
-// 	res, err := stmt.Query(vehicle.ID)
-// 	if err != nil {
-// 		return err
-// 	}
-
-// 	//nulls
-// 	var subai, convcid, contypeid *int
-// 	var subname, convalue, contypename *string
-
-// 	for res.Next() {
-// 		err = res.Scan(
-// 			&v.BaseVehicle.AAIAID,
-// 			&v.BaseVehicle.Year.ID,
-// 			&v.BaseVehicle.Make.AAIAID,
-// 			&v.BaseVehicle.Make.Name,
-// 			&v.BaseVehicle.Model.AAIAID,
-// 			&v.BaseVehicle.Model.Name,
-// 			&subai,
-// 			&subname,
-// 			&convcid,
-// 			&convalue,
-// 			&contypeid,
-// 			&contypename,
-// 		)
-// 		if err != nil {
-// 			return err
-// 		}
-
-// 		if subai != nil {
-// 			v.Submodel.AAIAID = *subai
-// 		}
-// 		if subname != nil {
-// 			v.Submodel.Name = *subname
-// 		}
-// 		if convcid != nil {
-// 			con.VcdbID = *convcid
-// 		}
-// 		if convalue != nil {
-// 			con.Value = *convalue
-// 		}
-// 		if contypeid != nil {
-// 			con.Type.AcesTypeID = *contypeid
-// 		}
-// 		if contypename != nil {
-// 			con.Type.Name = *contypename
-// 		}
-
-// 		v.Configuration.Configs = append(v.Configuration.Configs, con)
-// 	}
-// 	log.Print(v, vehicle)
-// 	//check for match
-// 	if v.BaseVehicle.Year.ID != vehicle.Year || v.BaseVehicle.Make.Name != vehicle.Make || v.BaseVehicle.Model.Name != vehicle.Model || v.Submodel.Name != vehicle.Submodel {
-// 		err = errors.New("vehicle not found")
-// 		return err
-// 	}
-
-// 	if len(vehicle.Config) > 0 && len(v.Configuration.Configs) > 0 {
-// 		configMap := make(map[string]string)
-// 		for _, con := range vehicle.Config {
-// 			configMap[con.Type] = con.Value
-// 		}
-// 		for _, newVehicleConfig := range v.Configuration.Configs {
-// 			if val, ok := configMap[newVehicleConfig.Type.Name]; ok {
-// 				if val != newVehicleConfig.Value {
-// 					//config Value not matched
-// 					err = errors.New("vehicle config value not found")
-// 					return err
-// 				}
-
-// 			} else {
-// 				//config type not matched
-// 				err = errors.New("vehicle config type not found " + newVehicleConfig.Type.Name + strconv.Itoa(v.ID))
-// 				return err
-// 			}
-// 		}
-// 	}
-
-// 	return err
-// }
-
-// //from Old DB, by ID
-// func (v *Vehicle) Get() error {
-// 	var err error
-// 	db, err := sql.Open("mysql", database.OldDBConnectionString())
-// 	if err != nil {
-// 		return err
-// 	}
-// 	defer db.Close()
-
-// 	stmt, err := db.Prepare(getVehicle)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	defer stmt.Close()
-// 	var sub, con, app *int
-// 	err = stmt.QueryRow(v.ID).Scan(&v.ID, &v.BaseVehicle.ID, &sub, &con, &app, &v.RegionID)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	if sub != nil {
-// 		v.Submodel.ID = *sub
-// 	}
-// 	if con != nil {
-// 		v.Configuration.ID = *con
-// 	}
-// 	if app != nil {
-// 		v.AppID = *app
-// 	}
-// 	return err
-// }
-
-// func (v *Vehicle) Check() (int, error) {
-// 	var err error
-// 	var i int
-// 	db, err := sql.Open("mysql", database.NewDBConnectionString())
-// 	if err != nil {
-// 		return i, err
-// 	}
-// 	defer db.Close()
-
-// 	stmt, err := db.Prepare(checkVehicle)
-// 	if err != nil {
-// 		return i, err
-// 	}
-// 	defer stmt.Close()
-// 	err = stmt.QueryRow(v.BaseVehicle.ID, v.Submodel.ID, v.Configuration.ID, v.AppID, v.RegionID).Scan(&i)
-// 	return i, err
-// }
-
-// //TODO - make, model, sb and config FIRST
-// func (v *Vehicle) Insert() error {
-// 	var err error
-// 	//check for vehicle in new db
-// 	v.ID, err = v.Check()
-// 	if err != nil && err != sql.ErrNoRows {
-// 		return err
-// 	}
-// 	if v.ID > 0 {
-// 		return nil
-// 	}
-
-// 	//TODO - check/insert  Config Existence
-
-// 	db, err := sql.Open("mysql", database.NewDBConnectionString())
-// 	if err != nil {
-// 		return err
-// 	}
-// 	defer db.Close()
-
-// 	stmt, err := db.Prepare(insertVehicle)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	defer stmt.Close()
-// 	res, err := stmt.Exec(v.BaseVehicle.ID, v.Submodel.ID, v.Configuration.ID, v.AppID, v.RegionID)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	id, err := res.LastInsertId()
-// 	if err != nil {
-// 		return err
-// 	}
-// 	v.ID = int(id)
-// 	return err
-// }
-
-// //check to make sure year exists int vcdb_year
-// //else, isnert it
-// func (v *Vehicle) GetYear() error {
-// 	var err error
-// 	db, err := sql.Open("mysql", database.NewDBConnectionString())
-// 	if err != nil {
-// 		return err
-// 	}
-// 	defer db.Close()
-
-// 	stmt, err := db.Prepare(getYear)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	defer stmt.Close()
-// 	var y int
-// 	err = stmt.QueryRow(v.BaseVehicle.Year.ID).Scan(&y)
-// 	if err == nil || (err != nil && err != sql.ErrNoRows) {
-// 		return err
-// 	}
-// 	stmt, err = db.Prepare(insertYear)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	_, err = stmt.Exec(v.BaseVehicle.Year.ID)
-// 	return err
-// }
-
-// //get makeID from vcdb_make
-// //else, get MakelID, vehicleTypeID from vcdb's Make
-// //insert that MakeID & vTypeID into vcdb_Make
-// func (v *Vehicle) GetMake() error {
-// 	var err error
-// 	db, err := sql.Open("mysql", database.NewDBConnectionString())
-// 	if err != nil {
-// 		return err
-// 	}
-// 	defer db.Close()
-
-// 	stmt, err := db.Prepare(getMakeByName)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	defer stmt.Close()
-// 	err = stmt.QueryRow(v.BaseVehicle.Make.AAIAID, v.BaseVehicle.Make.Name).Scan(v.BaseVehicle.Make.ID)
-// 	if err == nil || (err != nil && err != sql.ErrNoRows) {
-// 		return err
-// 	}
-
-// 	vcdb, err := sql.Open("mysql", database.VcdbConnectionString())
-// 	if err != nil {
-// 		return err
-// 	}
-// 	defer vcdb.Close()
-
-// 	stmt, err = vcdb.Prepare(getMakeFromVcdb)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	defer stmt.Close()
-// 	err = stmt.QueryRow(v.BaseVehicle.Make.Name).Scan(v.BaseVehicle.Make.AAIAID)
-// 	if err != nil {
-// 		return err
-// 	}
-
-// 	stmt, err = db.Prepare(insertMake)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	res, err := stmt.Exec(v.BaseVehicle.Make.Name, v.BaseVehicle.Make.AAIAID)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	id, err := res.LastInsertId()
-// 	if err != nil {
-// 		return err
-// 	}
-// 	v.BaseVehicle.Make.ID = int(id)
-// 	return nil
-// }
-
-// //get modelID from vcdb_model
-// //else, get ModelID, vehicleTypeID from vcdb's Model
-// //insert that ModelID & vTypeID into vcdb_Model
-// func (v *Vehicle) GetModel() error {
-// 	var err error
-// 	db, err := sql.Open("mysql", database.NewDBConnectionString())
-// 	if err != nil {
-// 		return err
-// 	}
-// 	defer db.Close()
-
-// 	stmt, err := db.Prepare(getModelByName)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	defer stmt.Close()
-// 	err = stmt.QueryRow(v.BaseVehicle.Model.AAIAID, v.BaseVehicle.Model.Name).Scan(v.BaseVehicle.Model.ID)
-// 	if err == nil || (err != nil && err != sql.ErrNoRows) {
-// 		return err
-// 	}
-
-// 	vcdb, err := sql.Open("mysql", database.VcdbConnectionString())
-// 	if err != nil {
-// 		return err
-// 	}
-// 	defer vcdb.Close()
-
-// 	stmt, err = vcdb.Prepare(getModelFromVcdb)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	defer stmt.Close()
-// 	err = stmt.QueryRow(v.BaseVehicle.Model.Name).Scan(v.BaseVehicle.Model.AAIAID, v.BaseVehicle.Model.VehicleTypeID)
-// 	if err != nil {
-// 		return err
-// 	}
-
-// 	stmt, err = db.Prepare(insertModel)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	res, err := stmt.Exec(v.BaseVehicle.Model.AAIAID, v.BaseVehicle.Model.Name, v.BaseVehicle.Model.VehicleTypeID)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	id, err := res.LastInsertId()
-// 	if err != nil {
-// 		return err
-// 	}
-// 	v.BaseVehicle.Model.ID = int(id)
-// 	return nil
-// }
-
-// //get submodelID from submodel
-// //else, get SubModelID, vehicleTypeID from vcdb's subModel
-// //insert that SubModelID  into subModel
-// func (v *Vehicle) GetSubmodel() error {
-// 	var err error
-// 	db, err := sql.Open("mysql", database.NewDBConnectionString())
-// 	if err != nil {
-// 		return err
-// 	}
-// 	defer db.Close()
-
-// 	stmt, err := db.Prepare(getSubmodelByName)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	defer stmt.Close()
-// 	err = stmt.QueryRow(v.Submodel.Name, v.Submodel.AAIAID).Scan(v.Submodel.ID)
-// 	if err == nil || (err != nil && err != sql.ErrNoRows) {
-// 		return err
-// 	}
-
-// 	vcdb, err := sql.Open("mysql", database.VcdbConnectionString())
-// 	if err != nil {
-// 		return err
-// 	}
-// 	defer vcdb.Close()
-
-// 	stmt, err = vcdb.Prepare(getSubmodelFromVcdb)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	defer stmt.Close()
-// 	err = stmt.QueryRow(v.Submodel.Name).Scan(v.Submodel.AAIAID)
-// 	if err != nil {
-// 		return err
-// 	}
-
-// 	stmt, err = db.Prepare(insertSubmodel)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	res, err := stmt.Exec(v.Submodel.AAIAID, v.Submodel.Name)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	id, err := res.LastInsertId()
-// 	if err != nil {
-// 		return err
-// 	}
-// 	v.Submodel.ID = int(id)
-// 	return nil
-// }
-
+//Imports Functions - import base,make,model,sub,config tables
 func ImportBaseVehicles() error {
 	var err error
 	var bs []BaseVehicle
@@ -1217,7 +830,6 @@ func ImportConfigs() error {
 	for _, c := range configs {
 
 		//check attr type
-		// var c. int
 		err = atStmt.QueryRow(c.Type.Name, c.Type.AcesTypeID, c.Type.Sort).Scan(&c.Type.ID)
 		if err != nil && err != sql.ErrNoRows {
 			return err
