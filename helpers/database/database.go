@@ -9,10 +9,10 @@ import (
 	// "gopkg.in/mgo.v2"
 )
 
-var apiKey = os.Getenv("API_KEY")
+var ApiKey = os.Getenv("API_KEY")
 
 // var Api = "http://ariesautoapi.curtmfg.com/part?key=" + apiKey
-var Api = "http://localhost:8080/part?key=" + apiKey
+var Api = "http://localhost:8080/"
 
 // func MongoConnectionString() *mgo.DialInfo {
 // 	var info mgo.DialInfo

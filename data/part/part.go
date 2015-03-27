@@ -1,6 +1,7 @@
 package part
 
 import (
+	"github.com/curt-labs/sweetData/data/vehicle"
 	"github.com/curt-labs/sweetData/data/video"
 	"github.com/curt-labs/sweetData/helpers/database"
 	_ "github.com/go-sql-driver/mysql"
@@ -8,7 +9,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"io/ioutil"
-	"log"
+	// "log"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -238,7 +239,7 @@ func GetAndInsertParts() error {
 
 func getPartsByPage(page int) ([]Part, error) {
 	var ps []Part
-	res, err := http.Get(database.Api + "&count=5&page=" + strconv.Itoa(page))
+	res, err := http.Get(database.Api + "part?key=" + database.ApiKey + "&count=5&page=" + strconv.Itoa(page))
 	if err != nil {
 		return ps, err
 	}
@@ -277,7 +278,6 @@ func (p *Part) Check() (int, error) {
 //Insert Part into New DB
 func InsertParts(parts []Part) error {
 	var err error
-
 	//you'll want these maps, friend
 	imageSizeMap, err := getImageSizeMap()
 	if err != nil {
@@ -300,37 +300,38 @@ func InsertParts(parts []Part) error {
 	}
 	defer stmt.Close()
 	for _, p := range parts {
-		id, err := p.Check()
-		if err != nil && err != sql.ErrNoRows {
-			return err
-		}
-		//insert part
-		if id < 1 || err == sql.ErrNoRows {
-			_, err = stmt.Exec(
-				p.ID,
-				p.Status,
-				p.DateModified,
-				p.DateAdded,
-				p.ShortDesc,
-				p.OldPartNumber,
-				p.PriceCode,
-				p.ClassID,
-				p.Featured,
-				p.AcesPartTypeID,
-				p.ReplacedBy,
-				p.BrandID,
-			)
-			if err != nil {
-				return err
-			}
-		}
+		// id, err := p.Check()
+		// if err != nil && err != sql.ErrNoRows {
+		// 	return err
+		// }
+		// //insert part
+		// if id < 1 || err == sql.ErrNoRows {
+		// 	_, err = stmt.Exec(
+		// 		p.ID,
+		// 		p.Status,
+		// 		p.DateModified,
+		// 		p.DateAdded,
+		// 		p.ShortDesc,
+		// 		p.OldPartNumber,
+		// 		p.PriceCode,
+		// 		p.ClassID,
+		// 		p.Featured,
+		// 		p.AcesPartTypeID,
+		// 		p.ReplacedBy,
+		// 		p.BrandID,
+		// 	)
+		// 	if err != nil {
+		// 		return err
+		// 	}
+		// }
 
 		//vehicles
-		err = vehicle.InsertVehicles(p.Vehicles)
+		err = vehicle.InsertPartVehicles(p.ID)
 		if err != nil {
 			return err
 		}
 
+		break //TOOD
 		//TODO -insert VEHICLE PART !!!!
 
 		//videos

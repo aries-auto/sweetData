@@ -4,6 +4,7 @@ import (
 	// "github.com/curt-labs/sweetData/data/category"
 	"flag"
 	"github.com/curt-labs/sweetData/data/part"
+	// "github.com/curt-labs/sweetData/data/vehicle"
 	"log"
 )
 
@@ -11,7 +12,10 @@ import (
 
 func main() {
 	flag.Parse()
-	//update Parts Before Categories
+	// err := vehicle.ImportVehicles()
+	// log.Print(err)
+
+	// update Parts Before Categories
 	err := part.GetAndInsertParts()
 	log.Print(err)
 
