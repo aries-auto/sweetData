@@ -49,6 +49,16 @@ type Scanner interface {
 	Scan(...interface{}) error
 }
 
+func GetAndInsertCategories(brandId int) error {
+	var err error
+	cats, err := GetCategories(brandId)
+	if err != nil {
+		return err
+	}
+	err = InsertCategories(cats)
+	return err
+}
+
 //Get Cats from old DB
 func GetCategories(brandId int) ([]Category, error) {
 	var err error

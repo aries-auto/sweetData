@@ -1,3 +1,7 @@
+Directions:
+Set API endpoint and database connections in the helpers/database. Pass in APIKEY as environment variable (APIKEY is tied to brand)
+
+
 Categories (parentID restraint)
 CatPart
 Content

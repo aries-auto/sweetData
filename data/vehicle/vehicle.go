@@ -3,6 +3,7 @@ package vehicle
 import (
 	"github.com/curt-labs/sweetData/helpers/database"
 	_ "github.com/go-sql-driver/mysql"
+	// "gopkg.in/mgo.v2"
 
 	"database/sql"
 	"encoding/json"
@@ -85,6 +86,10 @@ type Config struct {
 	Value string `json:"value,omitempty" xml:"value,omitempty"`
 }
 
+const (
+	mongoErrorCollection = "errors"
+)
+
 var (
 	insertVehicle = `insert into vcdb_Vehicle (BaseVehicleID, SubModelID, ConfigID, AppID, RegionID) values (?,?,?,?,?)`
 	getMakeByName = `select ID from vcdb_Make where AAIAMakeID = ? and MakeName = ?`
@@ -133,7 +138,7 @@ var (
 		and ca.value = ?`
 	insertVehicleConfig          = `insert into VehicleConfig (AAIAVehicleConfigID) values (0)`
 	insertVehicleConfigAttribute = `insert into VehicleConfigAttribute (AttributeID, VehicleConfigID) values (?,?)`
-	insertVehiclePartJoin        = `insert info vcdb_VehiclePart (VehicleID, PartNumber) values (?,?)`
+	insertVehiclePartJoin        = `insert into vcdb_VehiclePart (VehicleID, PartNumber) values (?,?)`
 	findVehicle                  = `select v.ID, b.AAIABaseVehicleID, b.YearID, ma.AAIAMakeID, ma.MakeName, mo.AAIAModelID, mo.ModelName, 
 		s.AAIASubmodelID, s.SubmodelName, ca.ID, ca.vcdbID, ca.value, cat.AcesTypeID, cat.Name
 		from vcdb_Vehicle as v 
@@ -148,31 +153,40 @@ var (
 		and ma.MakeName = ?
 		and mo.ModelName = ?`
 	submodelAddon      = ` and s.SubmodelName = ?`
-	submodelNullAddon  = ` and s.SubmodelName is null`
+	submodelNullAddon  = ` and (v.SubmodelID is null or v.SubmodelID = 0)`
 	configNullAddon    = ` and (v.ConfigID = 0 or v.ConfigID is null)`
 	configNotNullAddon = ` and (v.ConfigID > 0 and v.ConfigID is not null)`
 )
+
+func init() {
+	database.InitMongo()
+}
 
 func ImportVehicles() error {
 	var err error
 	err = ImportMakes()
 	if err != nil {
+		log.Print("makes", err)
 		return err
 	}
 	err = ImportModels()
 	if err != nil {
+		log.Print("models", err)
 		return err
 	}
 	err = ImportBaseVehicles()
 	if err != nil {
+		log.Print("base", err)
 		return err
 	}
 	err = ImportSubmodels()
 	if err != nil {
+		log.Print("subs", err)
 		return err
 	}
 	err = ImportConfigs()
 	if err != nil {
+		log.Print("configs", err)
 		return err
 	}
 	log.Print("V import done")
@@ -320,25 +334,22 @@ func InsertPartVehicle(ve PartVehicle, partID int) error {
 						return err
 					}
 				}
-			} else {
-				//type not found
-				v.ID, err = ve.Insert()
-				if err != nil {
-					return err
-				}
 			}
 		}
 
 	}
 
 	//Vehicle doesn't exist (id == 0), create
+	sess := database.MongoSession.Copy() //to save errors
 	if v.ID == 0 {
-		v.ID, err = ve.Insert()
+		if v.BaseVehicle.ID == 0 {
+			err = sess.DB("DataMigration").C(mongoErrorCollection).Insert(v)
+		}
+		err = v.Insert()
 		if err != nil {
 			return err
 		}
 	}
-
 	//join part
 	stmt, err := db.Prepare(insertVehiclePartJoin)
 	if err != nil {
@@ -355,6 +366,8 @@ func (ve *PartVehicle) Insert() (int, error) {
 	var vid int
 	var BaseVehicleID, SubModelID, ConfigID int
 
+	sess := database.MongoSession.Copy()
+
 	db, err := sql.Open("mysql", database.NewDBConnectionString())
 	if err != nil {
 		return 0, err
@@ -369,8 +382,10 @@ func (ve *PartVehicle) Insert() (int, error) {
 	defer stmt.Close()
 	err = stmt.QueryRow(ve.Year, ve.Make, ve.Model).Scan(&BaseVehicleID)
 	if err != nil {
-		log.Panic("You missed importing a base vehicle")
+		// log.Panic("You missed importing a base vehicle")
+		err = sess.DB("DataMigration").C(mongoErrorCollection).Insert(err.Error())
 		return 0, err
+
 	}
 
 	stmt, err = db.Prepare(getSubmodel)
@@ -380,7 +395,9 @@ func (ve *PartVehicle) Insert() (int, error) {
 	defer stmt.Close()
 	err = stmt.QueryRow(ve.Submodel).Scan(&SubModelID)
 	if err != nil {
-		log.Panic("You missed importing a submodel")
+		// log.Panic("You missed importing a submodel")
+
+		err = sess.DB("DataMigration").C(mongoErrorCollection).Insert(err.Error())
 		return 0, err
 	}
 
@@ -395,7 +412,9 @@ func (ve *PartVehicle) Insert() (int, error) {
 		var attID int
 		err = stmt.QueryRow(partVehicleConfig.Type, partVehicleConfig.Value).Scan(&attID)
 		if err != nil {
-			log.Panic("You missed importing a config")
+			// log.Panic("You missed importing a config")
+
+			err = sess.DB("DataMigration").C(mongoErrorCollection).Insert(err.Error())
 			return 0, err
 		}
 		attIDs = append(attIDs, attID)
@@ -441,6 +460,28 @@ func (ve *PartVehicle) Insert() (int, error) {
 	id, err = res.LastInsertId()
 	vid = int(id)
 	return vid, err
+}
+
+func (v *Vehicle) Insert() error {
+	var err error
+	newdb, err := sql.Open("mysql", database.NewDBConnectionString())
+	if err != nil {
+		return err
+	}
+	defer newdb.Close()
+	//insert vehicle
+	stmt, err := newdb.Prepare(insertVehicle)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+	res, err := stmt.Exec(v.BaseVehicle.ID, v.Submodel.ID, v.Configuration.ID, 0, 0)
+	if err != nil {
+		return err
+	}
+	id, err := res.LastInsertId()
+	v.ID = int(id)
+	return err
 }
 
 //Imports Functions - import base,make,model,sub,config tables
@@ -507,6 +548,7 @@ func ImportBaseVehicles() error {
 			return err
 		}
 		if err == sql.ErrNoRows {
+			err = nil
 			//insert
 			b.Make.ID = makemap[b.Make.AAIAID]
 			b.Model.ID = modelmap[b.Model.AAIAID]
@@ -630,6 +672,7 @@ func ImportMakes() error {
 			return err
 		}
 		if err == sql.ErrNoRows {
+			err = nil
 			res, err := insStmt.Exec(m.AAIAID, m.Name)
 			if err != nil {
 				return err
@@ -694,6 +737,7 @@ func ImportModels() error {
 			return err
 		}
 		if err == sql.ErrNoRows {
+			err = nil
 			res, err := insStmt.Exec(m.AAIAID, m.Name, m.VehicleTypeID)
 			if err != nil {
 				return err
@@ -730,12 +774,13 @@ func ImportSubmodels() error {
 	defer stmt.Close()
 	res, err := stmt.Query()
 	if err != nil {
-
 		return err
 	}
+
 	for res.Next() {
 		err = res.Scan(&s.AAIAID, &s.Name)
 		if err != nil {
+
 			return err
 		}
 		ss = append(ss, s)
@@ -748,6 +793,7 @@ func ImportSubmodels() error {
 
 	insStmt, err := newdb.Prepare(insertSubmodel)
 	if err != nil {
+
 		return err
 	}
 	defer stmt.Close()
@@ -758,6 +804,7 @@ func ImportSubmodels() error {
 			return err
 		}
 		if err == sql.ErrNoRows {
+			err = nil
 			res, err := insStmt.Exec(s.AAIAID, s.Name)
 			if err != nil {
 				return err
@@ -835,6 +882,7 @@ func ImportConfigs() error {
 			return err
 		}
 		if err == sql.ErrNoRows {
+			err = nil
 			//insert type
 			res, err := atInsStmt.Exec(c.Type.Name, c.Type.AcesTypeID, c.Type.Sort)
 			if err != nil {
@@ -854,6 +902,7 @@ func ImportConfigs() error {
 			return err
 		}
 		if err == sql.ErrNoRows {
+			err = nil
 			res, err := aInsStmt.Exec(c.Type.ID, c.VcdbID, c.Value)
 			if err != nil {
 				return err

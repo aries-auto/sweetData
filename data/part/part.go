@@ -9,7 +9,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"io/ioutil"
-	// "log"
+	"log"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -195,10 +195,10 @@ var (
 	insertAttribute = `insert into PartAttribute (partID, value, field, sort, canFilter) values (?,?,?,?,?)`
 	checkPrice      = `select priceID from Price where partID = ? and priceType = ? and price = ? and enforced = ? `
 	insertPrice     = `insert into Price (partID, priceType, price, enforced) values (?,?,?,?)`
-	checkReview     = `select reviewID from Review where partID = ? and rating = ? and subject = ? and review _text = ? and 
+	checkReview     = `select reviewID from Review where partID = ? and rating = ? and subject = ? and review_text = ? and 
 		name = ? and email = ? and active = ? and approved = ? and createdDate = ? and cust_id = ? `
-	insertReview = `insert into Review (partID,rating, subject, review _text,
-		name, email, active, approved, createdDate, cust_id) values (?,?,?,?,?,?,?,?,?,?,?)`
+	insertReview = `insert into Review (partID,rating, subject, review_text,
+		name, email, active, approved, createdDate, cust_id) values (?,?,?,?,?,?,?,?,?,?)`
 	checkImage      = `select imageID from PartImages where sizeID = ? and sort = ? and path = ? and height = ? and width = ? and partID = ?`
 	insertImage     = `insert into PartImages (sizeID, sort, path, height, width, partID) values (?,?,?,?,?,?)`
 	getImageSizeIds = `select size, sizeID from PartImageSizes`
@@ -351,6 +351,7 @@ func InsertParts(parts []Part) error {
 			}
 			err = a.Insert(p)
 			if err != nil {
+				log.Print("at", err)
 				return err
 			}
 		}
@@ -366,6 +367,7 @@ func InsertParts(parts []Part) error {
 			}
 			err = price.Insert(p)
 			if err != nil {
+				log.Print("price", err)
 				return err
 			}
 		}
@@ -381,6 +383,7 @@ func InsertParts(parts []Part) error {
 			}
 			err = r.Insert(p)
 			if err != nil {
+				log.Print("review", err)
 				return err
 			}
 		}
@@ -397,6 +400,7 @@ func InsertParts(parts []Part) error {
 			}
 			err = image.Insert(p, imageSizeID)
 			if err != nil {
+				log.Print("images", err)
 				return err
 			}
 		}
@@ -417,6 +421,7 @@ func InsertParts(parts []Part) error {
 			}
 			err = pack.Insert(p, dimUOMID, weiUOMID, packUOMID)
 			if err != nil {
+				log.Print("pack", err)
 				return err
 			}
 		}
@@ -431,6 +436,7 @@ func InsertParts(parts []Part) error {
 			if err == sql.ErrNoRows || c.ContentType.Id == 0 {
 				err = c.ContentType.Insert()
 				if err != nil {
+					log.Print("contenttype", err)
 					return err
 				}
 			}
@@ -443,6 +449,7 @@ func InsertParts(parts []Part) error {
 			if err == sql.ErrNoRows || c.ID == 0 {
 				err = c.Insert(p)
 				if err != nil {
+					log.Print("content", err)
 					return err
 				}
 			}
@@ -455,6 +462,7 @@ func InsertParts(parts []Part) error {
 			}
 			err = c.InsertPartContent(p)
 			if err != nil {
+				log.Print("partcontnt", err)
 				return err
 			}
 		}
@@ -471,6 +479,7 @@ func InsertParts(parts []Part) error {
 			if err == sql.ErrNoRows || c.ID == 0 {
 				err = c.Insert(p)
 				if err != nil {
+					log.Print("install", err)
 					return err
 				}
 			}
@@ -483,6 +492,7 @@ func InsertParts(parts []Part) error {
 			}
 			err = c.InsertPartContent(p)
 			if err != nil {
+				log.Print("install part", err)
 				return err
 			}
 		}
@@ -582,7 +592,6 @@ func (r *Review) Check(p Part) (int, error) {
 		r.Subject,
 		r.ReviewText,
 		r.Name,
-		r.Name,
 		r.Email,
 		r.Active,
 		r.Approved,
@@ -610,7 +619,6 @@ func (r *Review) Insert(p Part) error {
 		r.Rating,
 		r.Subject,
 		r.ReviewText,
-		r.Name,
 		r.Name,
 		r.Email,
 		r.Active,

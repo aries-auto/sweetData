@@ -3,10 +3,10 @@ package database
 import (
 	"fmt"
 	"os"
-	// "strings"
-	// "time"
+	"strings"
+	"time"
 
-	// "gopkg.in/mgo.v2"
+	"gopkg.in/mgo.v2"
 )
 
 var ApiKey = os.Getenv("API_KEY")
@@ -14,26 +14,43 @@ var ApiKey = os.Getenv("API_KEY")
 // var Api = "http://ariesautoapi.curtmfg.com/part?key=" + apiKey
 var Api = "http://localhost:8080/"
 
-// func MongoConnectionString() *mgo.DialInfo {
-// 	var info mgo.DialInfo
+func InitMongo() error {
+	var err error
+	if MongoSession == nil {
+		connectionString := MongoConnectionString()
+		MongoSession, err = mgo.DialWithInfo(connectionString)
+		if err == nil {
+			MongoDatabase = connectionString.Database
+		}
+	}
+	return err
+}
 
-// 	addresses := []string{"127.0.0.1"}
-// 	if hostString := os.Getenv("MONGO_URL"); hostString != "" {
-// 		addresses = strings.Split(hostString, ",")
-// 	}
-// 	info.Addrs = addresses
+var (
+	MongoDatabase string
+	MongoSession  *mgo.Session
+)
 
-// 	info.Username = os.Getenv("MONGO_USERNAME")
-// 	info.Password = os.Getenv("MONGO_PASSWORD")
-// 	info.Database = os.Getenv("MONGO_DATABASE")
-// 	info.Timeout = time.Second * 2
-// 	if info.Database == "" {
-// 		info.Database = "TrucksPlus"
-// 	}
-// 	info.Source = "admin"
+func MongoConnectionString() *mgo.DialInfo {
+	var info mgo.DialInfo
 
-// 	return &info
-// }
+	addresses := []string{"127.0.0.1"}
+	if hostString := os.Getenv("MONGO_URL"); hostString != "" {
+		addresses = strings.Split(hostString, ",")
+	}
+	info.Addrs = addresses
+
+	info.Username = os.Getenv("MONGO_USERNAME")
+	info.Password = os.Getenv("MONGO_PASSWORD")
+	info.Database = os.Getenv("MONGO_DATABASE")
+	info.Timeout = time.Second * 2
+	if info.Database == "" {
+		info.Database = "DataMigration"
+	}
+	info.Source = "admin"
+
+	return &info
+}
 
 func NewDBConnectionString() string {
 	if addr := os.Getenv("DATABASE_HOST"); addr != "" {
